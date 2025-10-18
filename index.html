@@ -68,10 +68,10 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
         
-        // NETLIFY FUNCTION INTEGRATION
+        // NETLIFY AI INTEGRATION
         const callClaudeAI = async (prompt) => {
           try {
-            console.log('🤖 Calling Netlify function...');
+            console.log('🤖 Calling Claude AI via Netlify...');
             
             const response = await fetch('/.netlify/functions/claude-api', {
               method: 'POST',
@@ -84,16 +84,17 @@
             });
             
             if (!response.ok) {
+              console.error('Function error:', response.status);
               throw new Error(`Function error: ${response.status}`);
             }
             
             const data = await response.json();
-            console.log('✅ AI response received');
+            console.log('✅ AI response received successfully');
             return data.content[0].text;
             
           } catch (error) {
             console.error('❌ AI Error:', error);
-            return 'AI temporarily unavailable';
+            return null; // Return null so we know AI failed
           }
         };
 
@@ -2299,7 +2300,44 @@
             'Biology', 'Chemistry', 'Physics', 'Mathematics'
           ];
 
-          const generateQuestions = (major, language) => {
+          const generateQuestions = async (major, language) => {
+            console.log('🤖 Generating AI questions for:', major, language);
+            
+            // AI prompt for questions
+            const aiPrompt = `Generate exactly 10 challenging interview questions for a ${major} position in ${language}. 
+            Make them specific to ${major} field with technical, behavioral, and situational questions.
+            Return ONLY a JSON array of strings with no additional text:
+            ["Question 1", "Question 2", "Question 3", ...]`;
+            
+            try {
+              const aiResponse = await callClaudeAI(aiPrompt);
+              
+              if (aiResponse) {
+                console.log('Raw AI response:', aiResponse);
+                
+                // Clean the response to extract JSON
+                let cleanResponse = aiResponse.trim();
+                
+                // Remove markdown code blocks if present
+                cleanResponse = cleanResponse.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+                
+                // Find JSON array in the response
+                const jsonMatch = cleanResponse.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                  const questions = JSON.parse(jsonMatch[0]);
+                  
+                  if (Array.isArray(questions) && questions.length >= 10) {
+                    console.log('✅ SUCCESS: Real AI questions generated!');
+                    return questions.slice(0, 10);
+                  }
+                }
+              }
+            } catch (error) {
+              console.log('⚠️ AI parsing failed:', error);
+            }
+            
+            // Fallback questions if AI fails
+            console.log('🔄 Using enhanced fallback questions for', major);
             const questionTemplates = {
               'Computer Science': {
                 English: [
@@ -2404,7 +2442,7 @@
             }
 
             setIsLoading(true);
-            const questions = generateQuestions(userInfo.major, userInfo.language);
+            const questions = await generateQuestions(userInfo.major, userInfo.language);
             
             // Better camera/microphone setup
             if (userInfo.interviewType === 'video') {
@@ -2477,36 +2515,77 @@
             }
           };
 
-          const generateFeedback = (questions, answers) => {
-            return questions.map((question, index) => {
-              const answer = answers[index] || '';
-              const score = Math.floor(Math.random() * 31) + 70;
+          const generateFeedback = async (questions, answers) => {
+            console.log('🤖 Generating AI feedback analysis...');
+            
+            const feedback = [];
+            
+            for (let i = 0; i < questions.length; i++) {
+              const question = questions[i];
+              const answer = answers[i] || '';
               
-              return {
+              console.log(`Analyzing Q${i+1} with AI...`);
+              
+              // AI prompt for analysis
+              const aiPrompt = `Analyze this interview answer and provide feedback:
+
+Question: ${question}
+Answer: ${answer}
+
+Provide analysis in this exact JSON format:
+{
+  "score": [number from 0-100],
+  "strengths": ["strength1", "strength2"],
+  "weaknesses": ["weakness1", "weakness2"],
+  "suggestions": ["suggestion1", "suggestion2"]
+}
+
+Be specific and constructive. If answer is empty, score 0-20.`;
+
+              try {
+                const aiResponse = await callClaudeAI(aiPrompt);
+                
+                if (aiResponse) {
+                  // Clean and parse AI response
+                  let cleanResponse = aiResponse.trim();
+                  cleanResponse = cleanResponse.replace(/```json\n?/g, '').replace(/```\n?$/g, '');
+                  
+                  const jsonMatch = cleanResponse.match(/\{[\s\S]*\}/);
+                  if (jsonMatch) {
+                    const analysis = JSON.parse(jsonMatch[0]);
+                    
+                    if (analysis.score !== undefined && analysis.strengths && analysis.weaknesses) {
+                      console.log(`✅ AI analysis for Q${i+1}: Score ${analysis.score}`);
+                      feedback.push({
+                        question,
+                        answer,
+                        score: Math.max(0, Math.min(100, analysis.score)),
+                        strengths: analysis.strengths || ['Clear communication'],
+                        weaknesses: analysis.weaknesses || ['Could be more detailed'],
+                        suggestions: analysis.suggestions || ['Practice more examples']
+                      });
+                      continue;
+                    }
+                  }
+                }
+              } catch (error) {
+                console.log(`⚠️ AI analysis failed for Q${i+1}, using fallback`);
+              }
+              
+              // Fallback analysis
+              const score = answer.trim() ? Math.floor(Math.random() * 31) + 60 : Math.floor(Math.random() * 21) + 10;
+              feedback.push({
                 question,
                 answer,
                 score,
-                strengths: [
-                  'Clear communication',
-                  'Relevant examples provided',
-                  'Confident delivery',
-                  'Good structure',
-                  'Professional tone'
-                ].slice(0, Math.floor(Math.random() * 3) + 1),
-                weaknesses: [
-                  'Could provide more specific details',
-                  'Answer could be more structured',
-                  'Consider adding quantifiable results',
-                  'Expand on examples'
-                ].slice(0, Math.floor(Math.random() * 2) + 1),
-                suggestions: [
-                  'Practice the STAR method for behavioral questions',
-                  'Prepare specific examples from your experience',
-                  'Work on maintaining eye contact',
-                  'Research common industry questions'
-                ].slice(0, Math.floor(Math.random() * 2) + 1)
-              };
-            });
+                strengths: answer.trim() ? ['Clear communication', 'Relevant content'] : ['Attempted to answer'],
+                weaknesses: answer.trim() ? ['Could be more specific', 'Add more examples'] : ['Answer too brief', 'Needs more detail'],
+                suggestions: ['Use the STAR method', 'Prepare specific examples', 'Practice articulation']
+              });
+            }
+            
+            console.log('✅ Feedback analysis complete');
+            return feedback;
           };
 
           const sendEmailReport = async () => {
@@ -2798,49 +2877,87 @@ NOTE: This is a demonstration. In a real system, this would:
                                 onClick={() => {
                                   if (!isRecording) {
                                     // Start recording
+                                    console.log('🎤 Starting speech recognition...');
+                                    
                                     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                                       const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
                                       const recognition = new SpeechRecognition();
+                                      
                                       recognition.continuous = true;
                                       recognition.interimResults = true;
+                                      recognition.maxAlternatives = 1;
                                       recognition.lang = userInfo.language === 'Arabic' ? 'ar-SA' : 'en-US';
+                                      
+                                      let finalTranscript = '';
                                       
                                       recognition.onstart = () => {
                                         setIsRecording(true);
-                                        console.log('Speech recognition started');
+                                        console.log('✅ Speech recognition started');
                                       };
                                       
                                       recognition.onresult = (event) => {
-                                        let finalTranscript = '';
+                                        let interimTranscript = '';
+                                        
                                         for (let i = event.resultIndex; i < event.results.length; i++) {
+                                          const transcript = event.results[i][0].transcript;
                                           if (event.results[i].isFinal) {
-                                            finalTranscript += event.results[i][0].transcript;
+                                            finalTranscript += transcript + ' ';
+                                          } else {
+                                            interimTranscript += transcript;
                                           }
                                         }
-                                        if (finalTranscript) {
-                                          setCurrentAnswer(prev => prev + ' ' + finalTranscript);
-                                        }
+                                        
+                                        const fullText = (finalTranscript + interimTranscript).trim();
+                                        setCurrentAnswer(fullText);
+                                        console.log('📝 Speech recognized:', fullText);
                                       };
                                       
                                       recognition.onerror = (event) => {
-                                        console.error('Speech recognition error:', event.error);
+                                        console.error('❌ Speech recognition error:', event.error);
                                         setIsRecording(false);
-                                        alert('Speech recognition error: ' + event.error);
+                                        
+                                        let message = 'Speech recognition failed: ';
+                                        switch(event.error) {
+                                          case 'no-speech':
+                                            message += 'No speech detected. Please speak clearly.';
+                                            break;
+                                          case 'not-allowed':
+                                            message += 'Microphone access denied. Please allow microphone access in browser settings and try again.';
+                                            break;
+                                          case 'network':
+                                            message += 'Network error. Check your internet connection.';
+                                            break;
+                                          default:
+                                            message += event.error + '. Please try typing your answer instead.';
+                                        }
+                                        alert(message);
                                       };
                                       
                                       recognition.onend = () => {
                                         setIsRecording(false);
-                                        console.log('Speech recognition ended');
+                                        console.log('🏁 Speech recognition ended');
+                                        if (finalTranscript.trim()) {
+                                          setCurrentAnswer(finalTranscript.trim());
+                                        }
                                       };
                                       
-                                      recognition.start();
-                                      setMediaRecorder(recognition);
+                                      try {
+                                        recognition.start();
+                                        setMediaRecorder(recognition);
+                                        console.log('🚀 Speech recognition started successfully');
+                                      } catch (error) {
+                                        console.error('❌ Failed to start recognition:', error);
+                                        alert('Failed to start speech recognition: ' + error.message);
+                                        setIsRecording(false);
+                                      }
+                                      
                                     } else {
-                                      alert('Speech recognition not supported in this browser. Please type your answer.');
+                                      alert('❌ Speech recognition not supported in this browser. Please use Chrome, Edge, or Safari, or type your answer instead.');
                                     }
                                   } else {
                                     // Stop recording
-                                    if (mediaRecorder) {
+                                    console.log('⏹️ Stopping speech recognition...');
+                                    if (mediaRecorder && typeof mediaRecorder.stop === 'function') {
                                       mediaRecorder.stop();
                                       setMediaRecorder(null);
                                     }
@@ -2880,7 +2997,41 @@ NOTE: This is a demonstration. In a real system, this would:
           }
 
           if (step === 'feedback') {
-            const feedback = generateFeedback(sessionData.questions, sessionData.answers);
+            const [feedback, setFeedback] = useState([]);
+            const [isAnalyzing, setIsAnalyzing] = useState(true);
+            
+            useEffect(() => {
+              const analyzeFeedback = async () => {
+                try {
+                  console.log('🤖 Starting AI analysis...');
+                  const feedbackData = await generateFeedback(sessionData.questions, sessionData.answers);
+                  setFeedback(feedbackData);
+                } catch (error) {
+                  console.error('Analysis error:', error);
+                } finally {
+                  setIsAnalyzing(false);
+                }
+              };
+              analyzeFeedback();
+            }, []);
+            
+            if (isAnalyzing) {
+              return (
+                <div className="min-h-screen pt-20 pb-12 flex items-center justify-center">
+                  <div className={`${theme === 'dark' ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl p-8 text-center max-w-md`}>
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <h2 className="text-2xl font-bold mb-4">🤖 AI Analysis in Progress</h2>
+                    <p className="text-gray-600">Claude AI is analyzing your interview responses...</p>
+                    <div className="mt-4 text-sm text-blue-600">
+                      This may take 30-60 seconds for detailed analysis
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            
             const totalScore = Math.floor(feedback.reduce((sum, item) => sum + item.score, 0) / feedback.length);
             const minutes = Math.floor(sessionData.sessionTime / 60);
             const seconds = sessionData.sessionTime % 60;
@@ -2977,22 +3128,37 @@ NOTE: This is a demonstration. In a real system, this would:
 
                     <div className="flex flex-col sm:flex-row gap-4">
                       <button
-                        onClick={sendEmailReport}
-                        className="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition"
+                        onClick={downloadAsPDF}
+                        className="flex-1 py-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition flex items-center justify-center space-x-2"
                       >
-                        📧 Email Report & PDF
+                        <span>📄</span>
+                        <span>Download PDF Report</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const feedback = await generateFeedback(sessionData.questions, sessionData.answers);
+                          const totalScore = Math.floor(feedback.reduce((sum, item) => sum + item.score, 0) / feedback.length);
+                          
+                          alert(`📧 EMAIL SENT!\n\nInterview Report Summary:\n• Overall Score: ${totalScore}%\n• Questions Answered: ${feedback.length}\n• Report sent to ${userInfo.email}\n\nNote: This is a simulation for demo purposes.`);
+                        }}
+                        className="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition flex items-center justify-center space-x-2"
+                      >
+                        <span>📧</span>
+                        <span>Email Report</span>
                       </button>
                       <button
                         onClick={() => setStep('setup')}
-                        className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
+                        className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition flex items-center justify-center space-x-2"
                       >
-                        🔄 Start New Interview
+                        <span>🔄</span>
+                        <span>New Interview</span>
                       </button>
                       <button
                         onClick={onBack}
-                        className={`flex-1 py-4 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} rounded-lg font-semibold transition`}
+                        className={`flex-1 py-4 ${theme === 'dark' ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} rounded-lg font-semibold transition flex items-center justify-center space-x-2`}
                       >
-                        🏠 Back to Home
+                        <span>🏠</span>
+                        <span>Back to Home</span>
                       </button>
                     </div>
                   </div>
