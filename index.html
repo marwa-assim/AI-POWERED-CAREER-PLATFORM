@@ -93,35 +93,9 @@
             
           } catch (error) {
             console.error('❌ AI Error:', error);
-            return 'AI temporarily unavailable - using enhanced fallback';
+            return 'AI temporarily unavailable';
           }
         };
-        
-        // Enhanced question generation with AI
-        const generateQuestions = async (major, language) => {
-          console.log('🤖 Generating AI questions for:', major, language);
-          
-          // Try real AI first
-          const aiPrompt = `Generate exactly 10 challenging interview questions for a ${major} position in ${language}. Include technical, behavioral, and situational questions. Return as a JSON array: ["question1", "question2", ...]`;
-          
-          try {
-            const aiResponse = await callClaudeAI(aiPrompt);
-            
-            if (aiResponse && !aiResponse.includes('temporarily unavailable')) {
-              const cleanResponse = aiResponse.replace(/```json\n?/g, '').replace(/```\n?$/g, '').trim();
-              const questions = JSON.parse(cleanResponse);
-              
-              if (Array.isArray(questions) && questions.length >= 10) {
-                console.log('✅ Real AI questions generated!');
-                return questions.slice(0, 10);
-              }
-            }
-          } catch (error) {
-            console.log('⚠️ AI parsing failed, using enhanced fallback');
-          }
-          
-          // Enhanced fallback questions
-          console.log('🔄 Using enhanced fallback questions');
 
         // ICONS
         const Upload = ({ className }) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>);
@@ -2430,7 +2404,7 @@
             }
 
             setIsLoading(true);
-            const questions = await generateQuestions(userInfo.major, userInfo.language);
+            const questions = generateQuestions(userInfo.major, userInfo.language);
             
             // Better camera/microphone setup
             if (userInfo.interviewType === 'video') {
