@@ -1,10 +1,9 @@
-const fetch = require('node-fetch');
-
 exports.handler = async (event, context) => {
-  console.log('Function called with method:', event.httpMethod);
+  console.log('🚀 Function started - method:', event.httpMethod);
   
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
+    console.log('✅ CORS preflight handled');
     return {
       statusCode: 200,
       headers: {
@@ -16,8 +15,8 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Only allow POST
   if (event.httpMethod !== 'POST') {
+    console.log('❌ Wrong method:', event.httpMethod);
     return {
       statusCode: 405,
       headers: { 'Access-Control-Allow-Origin': '*' },
@@ -26,10 +25,11 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Check API key
+    console.log('🔑 Checking API key...');
     const apiKey = process.env.CLAUDE_API_KEY;
+    
     if (!apiKey) {
-      console.error('CLAUDE_API_KEY environment variable not set');
+      console.log('❌ No API key found');
       return {
         statusCode: 500,
         headers: { 'Access-Control-Allow-Origin': '*' },
@@ -37,12 +37,13 @@ exports.handler = async (event, context) => {
       };
     }
     
-    console.log('API key found, length:', apiKey.length);
+    console.log('✅ API key found, length:', apiKey.length);
     
+    console.log('📝 Parsing request body...');
     const requestData = JSON.parse(event.body);
-    console.log('Request data:', JSON.stringify(requestData, null, 2));
+    console.log('✅ Request parsed successfully');
     
-    console.log('Making request to Claude API...');
+    console.log('🌐 Calling Claude API...');
     
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -54,11 +55,11 @@ exports.handler = async (event, context) => {
       body: JSON.stringify(requestData)
     });
 
-    console.log('Claude API response status:', response.status);
+    console.log('📊 Claude API status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Claude API error:', response.status, errorText);
+      console.log('❌ Claude API error:', errorText);
       return {
         statusCode: response.status,
         headers: { 'Access-Control-Allow-Origin': '*' },
@@ -70,7 +71,7 @@ exports.handler = async (event, context) => {
     }
 
     const data = await response.json();
-    console.log('Claude API success, response length:', JSON.stringify(data).length);
+    console.log('🎉 Claude API success! Response length:', JSON.stringify(data).length);
 
     return {
       statusCode: 200,
@@ -82,7 +83,9 @@ exports.handler = async (event, context) => {
     };
 
   } catch (error) {
-    console.error('Function error:', error);
+    console.log('💥 Function error:', error.message);
+    console.log('Stack:', error.stack);
+    
     return {
       statusCode: 500,
       headers: { 
@@ -90,9 +93,8 @@ exports.handler = async (event, context) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ 
-        error: 'Internal server error',
-        message: error.message,
-        stack: error.stack
+        error: 'Function failed',
+        message: error.message
       })
     };
   }
